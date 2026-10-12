@@ -69,3 +69,24 @@ done <<< "$container_ids"
 #    podman ps -a --filter "id=$container_id" \
 #      --format 'Name: {{.Names}} | Status: {{.Status}}'
 #done <<< "$container_ids"
+
+printf '%sDone deploying container.%s: %s\n' \
+    "$GREEN" "$NC"
+printf '%s====================================%s\n' \
+    "$GREEN" "$NC"
+
+
+echo "Running Floci tests..."
+printf '%s====================================%s\n' \
+    "$GREEN" "$NC"
+printf '%s[STARTING].%s\n' \
+    "$GREEN" "$NC"
+
+# Run the Floci smoke test
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+bash "$SCRIPT_DIR/run-floci-test.sh"
+
+printf '%s=============================================%s\n' \
+	"$GREEN" "$NC"
+printf '%s[DONE]%s\n' \
+    "$GREEN" "$NC"

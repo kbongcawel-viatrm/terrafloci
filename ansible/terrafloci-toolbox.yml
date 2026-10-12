@@ -25,6 +25,22 @@
       - dnf-plugins-core
 
   tasks:
+    - name: Query Fedora package installation state inside the toolbox
+      ansible.builtin.command:
+        argv:
+          - toolbox
+          - run
+          - --container
+          - "{{ toolbox_name }}"
+          - --
+          - rpm
+          - -q
+          - "{{ item }}"
+      loop: "{{ dnf_packages }}"
+      register: package_queries
+      changed_when: false
+      failed_when: package_queries.rc is defined and package_queries.rc not in [0, 1]
+
     - name: Install missing Fedora DNF packages inside the toolbox
       ansible.builtin.command:
         argv:

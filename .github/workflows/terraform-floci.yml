@@ -1,0 +1,75 @@
+name: Terraform and Terragrunt with Floci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  s3-integration:
+    runs-on: ubuntu-latest
+    services:
+      floci:
+        image: floci/floci:latest
+        ports:
+          - 4566:4566
+        options: >-
+          --health-cmd "curl -fsS http://localhost:4566/_floci/health || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-west-1
+      AWS_EC2_METADATA_DISABLED: "true"
+      AWS_PAGER: ""
+      AWS_ENDPOINT_URL: http://localhost:4566
+      TF_VAR_bucket_name: terrafloci-ci-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.5
+          terraform_wrapper: false
+
+      - name: Set up Terragrunt
+        uses: gruntwork-io/terragrunt-action@v3.4.1
+        with:
+          tg_version: 1.1.6
+          tg_command: --version
+
+      - name: Wait for Floci
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent "$AWS_ENDPOINT_URL/_floci/health"; then
+              echo "Floci is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Floci failed to become healthy" >&2
+          exit 1
+
+      - name: Format and validate Terraform module
+        run: |
+          terraform -chdir=terraform/modules/s3-bucket fmt -check -recursive
+          bash scripts/test-terragrunt-s3.sh
+
+      - name: Upload integration diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-floci-diagnostics
+          path: |
+            terraform/live/local/s3-bucket/terraform.tfstate
+            terraform/live/local/s3-bucket/.terragrunt-cache/**
+          if-no-files-found: ignore

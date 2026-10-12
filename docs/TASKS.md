@@ -131,7 +131,7 @@ Manage the same resource declaratively and understand Terraform's lifecycle.
 Exit criteria: 
 You can explain configuration, provider, plan, apply, state, drift, and destroy, and the same resource is managed successfully from start to finish.
 
-# Phase 6 — Build a reusable Terraform module
+# ⚠️[IN PROGRESS] Phase 6 — Build a reusable Terraform module
 Objective: 
 Move from a one-off configuration to a reusable, testable module.
 
@@ -145,6 +145,8 @@ Move from a one-off configuration to a reusable, testable module.
 7. Run formatting, validation, and a real plan against Floci.
 8. Apply, inspect, and destroy the resource.
 9. Document module inputs, outputs, prerequisites, and limitations.
+
+Progress: The S3 module and Terragrunt local example are implemented. A complete toolbox Floci run passed init, validate, plan, apply, AWS CLI `head-bucket` verification, and destroy. Remaining phase tasks concerning module lifecycle changes and documentation beyond S3 can be completed as the project scope expands.
 
 
 Suggested initial structure:
@@ -160,10 +162,14 @@ terraform/
       provider.tf
       outputs.tf
 
+
 Exit criteria: 
 The example can instantiate the module, pass validation, create a resource in Floci, and clean it up.
 
-# Phase 7 — Automate Terraform with GitHub Actions
+Implemented for S3: `terraform/modules/s3-bucket` is a reusable module and `terraform/live/local/s3-bucket/terragrunt.hcl` configures a local Floci deployment. Run `scripts/test-terragrunt-s3.sh` from the toolbox to exercise init, validate, plan, apply, AWS CLI verification, and destroy. The local backend is intentionally used; state is not shared with CI.
+
+# ⚠️[IN PROGRESS] Phase 7 — Automate Terraform with GitHub Actions
+
 Objective: 
 Validate infrastructure changes automatically before merging them.
 
@@ -183,6 +189,8 @@ Keep the first pipeline local-only: it should need no AWS account credentials or
 
 Exit criteria: 
 A pull request automatically passes formatting, validation, and a Floci-backed integration test; a deliberately invalid configuration fails the workflow.
+
+Implemented workflow: `.github/workflows/terraform-floci.yml` installs pinned Terraform and Terragrunt versions, uses the runner's AWS CLI, runs Floci as a GitHub Actions service, and performs disposable S3 apply/verify/destroy with dummy credentials. This repository has not yet observed a GitHub Actions run; mark this phase done after the workflow succeeds in GitHub.
 
 # Phase 8 — Build the Hello World infrastructure
 Objective: 

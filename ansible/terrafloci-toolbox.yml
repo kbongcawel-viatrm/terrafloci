@@ -25,7 +25,7 @@
       - dnf-plugins-core
 
   tasks:
-   - name: Install missing Fedora DNF packages inside the toolbox
+    - name: Install missing Fedora DNF packages inside the toolbox
       ansible.builtin.command:
         argv:
           - toolbox

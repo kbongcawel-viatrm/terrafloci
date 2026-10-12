@@ -1,5 +1,5 @@
 ---
-- name: Configure dependencies in the existing terrafloci toolbox
+- name: Prepare environment for Terraform, Terragrunt, Floci, and Ansible.
   hosts: localhost
   connection: local
   gather_facts: true
@@ -325,3 +325,4 @@
           - "Host rootless Podman socket: {{ host_podman_socket }}"
           - "Socket as visible inside Toolbox: {{ toolbox_host_socket }}"
           - "DOCKER_HOST is persisted for toolbox login shells."
+

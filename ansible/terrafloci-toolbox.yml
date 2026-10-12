@@ -189,5 +189,3 @@
       ansible.builtin.debug:
         msg:
           - "Dependencies are installed or already present in toolbox '{{ toolbox_name }}'."
-          - "Requested base image: {{ toolbox_image }} (the existing container was preserved)."
-

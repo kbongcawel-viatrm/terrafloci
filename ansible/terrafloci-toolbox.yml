@@ -25,100 +25,7 @@
       - dnf-plugins-core
 
   tasks:
-    - name: Verify required host commands are available
-      ansible.builtin.command:
-        argv:
-          - "{{ item }}"
-          - --version
-      loop:
-        - toolbox
-        - podman
-      changed_when: false
-
-    - name: Verify Podman is responding on the host
-      ansible.builtin.command:
-        argv:
-          - podman
-          - info
-          - --format
-          - json
-      register: host_podman_info
-      changed_when: false
-      failed_when: host_podman_info.rc != 0
-
-    - name: Report host Podman status
-      ansible.builtin.debug:
-        msg: "Host Podman is responding; the existing toolbox will be configured without being recreated."
-
-    - name: Inspect toolbox containers
-      ansible.builtin.command:
-        argv:
-          - toolbox
-          - list
-      register: toolbox_list
-      changed_when: false
-
-    - name: Confirm the existing terrafloci toolbox is present
-      ansible.builtin.assert:
-        that:
-          - "toolbox_name in toolbox_list.stdout"
-        fail_msg: >-
-          Toolbox '{{ toolbox_name }}' was not found. This playbook intentionally
-          does not create or replace it. Create it with the Fedora Toolbox 44
-          image first, then rerun this playbook.
-
-    - name: Inspect the existing toolbox state
-      ansible.builtin.command:
-        argv:
-          - podman
-          - container
-          - inspect
-          - "{{ toolbox_name }}"
-          - --format
-          - "{{ '{{.State}}' }}"
-      register: toolbox_inspect
-      changed_when: false
-
-    - name: Verify the existing toolbox is running
-      ansible.builtin.assert:
-        that:
-          - "'running' in toolbox_inspect.stdout"
-        fail_msg: >-
-          The existing '{{ toolbox_name }}' toolbox is not running. Start it
-          first; this playbook will not recreate or replace the container.
-
-    - name: Check whether the host rootless Podman API socket exists
-      ansible.builtin.stat:
-        path: "{{ host_podman_socket }}"
-      register: podman_socket_stat
-
-    - name: Require the host rootless Podman socket
-      ansible.builtin.assert:
-        that:
-          - podman_socket_stat.stat.exists
-          - podman_socket_stat.stat.issock | default(false)
-        fail_msg: >-
-          The host rootless Podman socket was not found at
-          {{ host_podman_socket }}. Ensure the host's podman.socket is enabled
-          and running, then rerun this playbook.
-
-    - name: Query Fedora package installation state inside the toolbox
-      ansible.builtin.command:
-        argv:
-          - toolbox
-          - run
-          - --container
-          - "{{ toolbox_name }}"
-          - --
-          - rpm
-          - -q
-          - "{{ item }}"
-      loop: "{{ dnf_packages }}"
-      register: package_queries
-      changed_when: false
-      failed_when: package_queries.rc is defined and package_queries.rc not in [0, 1]
-
-    - name: Install missing Fedora DNF packages inside the toolbox
+   - name: Install missing Fedora DNF packages inside the toolbox
       ansible.builtin.command:
         argv:
           - toolbox
@@ -239,13 +146,6 @@
           - "curl -fsSL --proto '=https' --tlsv1.2 {{ floci_install_url }} | sh"
       when: floci_check.rc != 0
 
-    - name: Check whether podman-compose is installed
-      ansible.builtin.command:
-        argv: [toolbox, run, --container, "{{ toolbox_name }}", --, sh, -lc, "command -v podman-compose"]
-      register: podman_compose_check
-      changed_when: false
-      failed_when: false
-
     - name: Install podman-compose with pip
       ansible.builtin.command:
         argv:
@@ -259,35 +159,6 @@
           - -m
           - pip
           - install
-          - podman-compose
-      when: podman_compose_check.rc != 0
-
-    - name: Configure rootless Podman socket access and Docker-compatible clients
-      ansible.builtin.command:
-        argv:
-          - toolbox
-          - run
-          - --container
-          - "{{ toolbox_name }}"
-          - --
-          - sh
-          - -c
-          - >-
-            set -eu;
-            test -S '{{ toolbox_host_socket }}';
-            mkdir -p "$HOME/.config/environment.d";
-            if [ ! -f "$HOME/.config/environment.d/terrafloci-podman.conf" ] ||
-               ! grep -Fqx 'DOCKER_HOST=unix://{{ toolbox_host_socket }}' "$HOME/.config/environment.d/terrafloci-podman.conf"; then
-              printf 'DOCKER_HOST=unix://{{ toolbox_host_socket }}\n' > "$HOME/.config/environment.d/terrafloci-podman.conf";
-            fi;
-            touch "$HOME/.bashrc";
-            grep -Fqx 'export DOCKER_HOST=unix://{{ toolbox_host_socket }}' "$HOME/.bashrc" ||
-              printf '\nexport DOCKER_HOST=unix://{{ toolbox_host_socket }}\n' >> "$HOME/.bashrc";
-            touch "$HOME/.bash_profile";
-            grep -Fqx 'export DOCKER_HOST=unix://{{ toolbox_host_socket }}' "$HOME/.bash_profile" ||
-              printf '\nexport DOCKER_HOST=unix://{{ toolbox_host_socket }}\n' >> "$HOME/.bash_profile"
-      register: podman_socket_config
-      changed_when: false
 
     - name: Verify required tools and Podman socket access inside the toolbox
       ansible.builtin.command:
@@ -301,28 +172,19 @@
           - -lc
           - >-
             set -eu;
-            git --version;
-            curl --version;
             jq --version;
             python3 --version;
             ansible --version;
             ansible-lint --version;
-            shellcheck --version;
             terraform version;
             terragrunt --version;
             aws --version;
             command -v floci;
-            podman-compose --version;
-            test -S '{{ toolbox_host_socket }}';
-            curl --silent --show-error --fail --unix-socket '{{ toolbox_host_socket }}' http://d/_ping
       changed_when: false
 
-    - name: Report configured toolbox and Podman socket
+    - name: Report toolbox state
       ansible.builtin.debug:
         msg:
           - "Dependencies are installed or already present in toolbox '{{ toolbox_name }}'."
           - "Requested base image: {{ toolbox_image }} (the existing container was preserved)."
-          - "Host rootless Podman socket: {{ host_podman_socket }}"
-          - "Socket as visible inside Toolbox: {{ toolbox_host_socket }}"
-          - "DOCKER_HOST is persisted for toolbox login shells."
 

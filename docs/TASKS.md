@@ -28,7 +28,7 @@ Create a reproducible toolbox environment with all development tools.
 Exit criteria: 
 A new Toolbox session can run all tools and connect to Floci without relying on undocumented host configuration.
 
-# ⚠️[IN PROGRES] Phase 2 — Understand Floci and AWS API behavior
+# ✅[DONE] Phase 2 — Understand Floci and AWS API behavior
 Objective: 
 Understand what Floci emulates, what persists, and how AWS clients communicate with it.
 
@@ -50,7 +50,7 @@ Understand what Floci emulates, what persists, and how AWS clients communicate w
 Exit criteria: 
 You can explain the request flow, endpoint configuration, persistence behavior, and the limits of your selected Floci version.
 
-#Phase 3 — Map AWS concepts to Floci
+# ⚠️[IN PROGRES] Phase 3 — Map AWS concepts to Floci
 Objective: 
 Learn the AWS resource model before writing infrastructure code.
 

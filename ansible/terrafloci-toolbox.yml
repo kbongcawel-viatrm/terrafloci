@@ -1,0 +1,311 @@
+---
+- name: Configure dependencies in the existing terrafloci toolbox
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    toolbox_name: terrafloci
+    toolbox_image: registry.fedoraproject.org/fedora-toolbox:44
+    hashicorp_repo_url: https://rpm.releases.hashicorp.com/fedora/hashicorp.repo
+    terragrunt_install_url: https://terragrunt.com/install
+    floci_install_url: https://floci.io/install.sh
+    host_runtime_dir: "{{ lookup('env', 'XDG_RUNTIME_DIR') | default('/run/user/' ~ ansible_user_uid, true) }}"
+    host_podman_socket: "{{ host_runtime_dir }}/podman/podman.sock"
+    toolbox_host_socket: "/run/host{{ host_podman_socket }}"
+    dnf_packages:
+      - git
+      - curl
+      - jq
+      - python3
+      - python3-pip
+      - ansible-core
+      - ansible-lint
+      - ShellCheck
+      - dnf-plugins-core
+
+  tasks:
+    - name: Verify required host commands are available
+      ansible.builtin.command:
+        argv:
+          - "{{ item }}"
+          - --version
+      loop:
+        - toolbox
+      changed_when: false
+
+    - name: Inspect toolbox containers
+      ansible.builtin.command:
+        argv:
+          - toolbox
+          - list
+      register: toolbox_list
+      changed_when: false
+
+    - name: Confirm the existing terrafloci toolbox is present
+      ansible.builtin.assert:
+        that:
+          - "toolbox_name in toolbox_list.stdout"
+        fail_msg: >-
+          Toolbox '{{ toolbox_name }}' was not found. This playbook intentionally
+          does not create or replace it. Create it with the Fedora Toolbox 44
+          image first, then rerun this playbook.
+
+    - name: Inspect the existing toolbox state
+      ansible.builtin.command:
+        argv:
+          - podman
+          - container
+          - inspect
+          - "{{ toolbox_name }}"
+          - --format
+          - "{{ '{{.State}}' }}"
+      register: toolbox_inspect
+      changed_when: false
+
+    - name: Verify the existing toolbox is running
+      ansible.builtin.assert:
+        that:
+          - "'running' in toolbox_inspect.stdout"
+        fail_msg: >-
+          The existing '{{ toolbox_name }}' toolbox is not running. Start it
+          first; this playbook will not recreate or replace the container.
+
+    - name: Check whether the host rootless Podman API socket exists
+      ansible.builtin.stat:
+        path: "{{ host_podman_socket }}"
+      register: podman_socket_stat
+
+    - name: Require the host rootless Podman socket
+      ansible.builtin.assert:
+        that:
+          - podman_socket_stat.stat.exists
+          - podman_socket_stat.stat.issock | default(false)
+        fail_msg: >-
+          The host rootless Podman socket was not found at
+          {{ host_podman_socket }}. Ensure the host's podman.socket is enabled
+          and running, then rerun this playbook.
+
+    - name: Query Fedora package installation state inside the toolbox
+      ansible.builtin.command:
+        argv:
+          - toolbox
+          - run
+          - --container
+          - "{{ toolbox_name }}"
+          - --
+          - rpm
+          - -q
+          - "{{ item }}"
+      loop: "{{ dnf_packages }}"
+      register: package_queries
+      changed_when: false
+      failed_when: package_queries.rc is defined and package_queries.rc not in [0, 1]
+
+    - name: Install missing Fedora DNF packages inside the toolbox
+      ansible.builtin.command:
+        argv:
+          - toolbox
+          - run
+          - --container
+          - "{{ toolbox_name }}"
+          - --
+          - sudo
+          - dnf
+          - install
+          - -y
+          - "{{ item.item }}"
+      loop: "{{ package_queries.results }}"
+      when: item.rc == 1
+      register: install_dnf_packages
+
+    - name: Check whether the HashiCorp repository is already configured
+      ansible.builtin.command:
+        argv:
+          - toolbox
+          - run
+          - --container
+          - "{{ toolbox_name }}"
+          - --
+          - sh
+          - -c
+          - "rpm -q terraform >/dev/null 2>&1 || test -f /etc/yum.repos.d/hashicorp.repo"
+      register: hashicorp_repo_check
+      changed_when: false
+      failed_when: false
+
+    - name: Configure the official HashiCorp RPM repository
+      ansible.builtin.command:
+        argv:
+          - toolbox
+          - run
+          - --container
+          - "{{ toolbox_name }}"
+          - --
+          - sudo
+          - dnf
+          - config-manager
+          - addrepo
+          - --from-repofile={{ hashicorp_repo_url }}
+      when: hashicorp_repo_check.rc != 0
+
+    - name: Check whether Terraform is installed
+      ansible.builtin.command:
+        argv: [toolbox, run, --container, "{{ toolbox_name }}", --, rpm, -q, terraform]
+      register: terraform_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install Terraform from the HashiCorp RPM repository
+      ansible.builtin.command:
+        argv: [toolbox, run, --container, "{{ toolbox_name }}", --, sudo, dnf, install, -y, terraform]
+      when: terraform_check.rc != 0
+
+    - name: Check whether Terragrunt is installed
+      ansible.builtin.command:
+        argv: [toolbox, run, --container, "{{ toolbox_name }}", --, sh, -lc, "command -v terragrunt"]
+      register: terragrunt_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install Terragrunt using its official installer
+      ansible.builtin.command:
+        argv:
+          - toolbox
+          - run
+          - --container
+          - "{{ toolbox_name }}"
+          - --
+          - sudo
+          - sh
+          - -c
+          - "curl -fsSL --proto '=https' --tlsv1.2 {{ terragrunt_install_url }} | sh -s -- -d /usr/local/bin"
+      when: terragrunt_check.rc != 0
+
+    - name: Check whether AWS CLI v2 is installed
+      ansible.builtin.command:
+        argv: [toolbox, run, --container, "{{ toolbox_name }}", --, sh, -lc, "aws --version 2>&1"]
+      register: aws_cli_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install AWS CLI v2 using the official AWS installer
+      ansible.builtin.command:
+        argv:
+          - toolbox
+          - run
+          - --container
+          - "{{ toolbox_name }}"
+          - --
+          - sudo
+          - bash
+          - -c
+          - "curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip && unzip -q -o /tmp/awscliv2.zip -d /tmp && /tmp/aws/install --update && rm -rf /tmp/aws /tmp/awscliv2.zip"
+      when: aws_cli_check.rc != 0 or not (aws_cli_check.stdout is search('^aws-cli/2'))
+
+    - name: Check whether Floci CLI is installed
+      ansible.builtin.command:
+        argv: [toolbox, run, --container, "{{ toolbox_name }}", --, sh, -lc, "command -v floci"]
+      register: floci_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install Floci CLI using the official installer
+      ansible.builtin.command:
+        argv:
+          - toolbox
+          - run
+          - --container
+          - "{{ toolbox_name }}"
+          - --
+          - sh
+          - -c
+          - "curl -fsSL --proto '=https' --tlsv1.2 {{ floci_install_url }} | sh"
+      when: floci_check.rc != 0
+
+    - name: Check whether podman-compose is installed
+      ansible.builtin.command:
+        argv: [toolbox, run, --container, "{{ toolbox_name }}", --, sh, -lc, "command -v podman-compose"]
+      register: podman_compose_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install podman-compose with pip
+      ansible.builtin.command:
+        argv:
+          - toolbox
+          - run
+          - --container
+          - "{{ toolbox_name }}"
+          - --
+          - sudo
+          - python3
+          - -m
+          - pip
+          - install
+          - podman-compose
+      when: podman_compose_check.rc != 0
+
+    - name: Configure rootless Podman socket access and Docker-compatible clients
+      ansible.builtin.command:
+        argv:
+          - toolbox
+          - run
+          - --container
+          - "{{ toolbox_name }}"
+          - --
+          - sh
+          - -c
+          - >-
+            set -eu;
+            test -S '{{ toolbox_host_socket }}';
+            mkdir -p "$HOME/.config/environment.d";
+            if [ ! -f "$HOME/.config/environment.d/terrafloci-podman.conf" ] ||
+               ! grep -Fqx 'DOCKER_HOST=unix://{{ toolbox_host_socket }}' "$HOME/.config/environment.d/terrafloci-podman.conf"; then
+              printf 'DOCKER_HOST=unix://{{ toolbox_host_socket }}\n' > "$HOME/.config/environment.d/terrafloci-podman.conf";
+            fi;
+            touch "$HOME/.bashrc";
+            grep -Fqx 'export DOCKER_HOST=unix://{{ toolbox_host_socket }}' "$HOME/.bashrc" ||
+              printf '\nexport DOCKER_HOST=unix://{{ toolbox_host_socket }}\n' >> "$HOME/.bashrc";
+            touch "$HOME/.bash_profile";
+            grep -Fqx 'export DOCKER_HOST=unix://{{ toolbox_host_socket }}' "$HOME/.bash_profile" ||
+              printf '\nexport DOCKER_HOST=unix://{{ toolbox_host_socket }}\n' >> "$HOME/.bash_profile"
+      register: podman_socket_config
+      changed_when: false
+
+    - name: Verify required tools and Podman socket access inside the toolbox
+      ansible.builtin.command:
+        argv:
+          - toolbox
+          - run
+          - --container
+          - "{{ toolbox_name }}"
+          - --
+          - sh
+          - -lc
+          - >-
+            set -eu;
+            git --version;
+            curl --version;
+            jq --version;
+            python3 --version;
+            ansible --version;
+            ansible-lint --version;
+            shellcheck --version;
+            terraform version;
+            terragrunt --version;
+            aws --version;
+            command -v floci;
+            podman-compose --version;
+            test -S '{{ toolbox_host_socket }}';
+            curl --silent --show-error --fail --unix-socket '{{ toolbox_host_socket }}' http://d/_ping
+      changed_when: false
+
+    - name: Report configured toolbox and Podman socket
+      ansible.builtin.debug:
+        msg:
+          - "Dependencies are installed or already present in toolbox '{{ toolbox_name }}'."
+          - "Requested base image: {{ toolbox_image }} (the existing container was preserved)."
+          - "Host rootless Podman socket: {{ host_podman_socket }}"
+          - "Socket as visible inside Toolbox: {{ toolbox_host_socket }}"
+          - "DOCKER_HOST is persisted for toolbox login shells."

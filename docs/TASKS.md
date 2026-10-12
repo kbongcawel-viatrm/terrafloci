@@ -1,4 +1,5 @@
-# Phase 1 — Build the development environment
+ 
+# ✅[DONE] Phase 1 — Build the development environment
 Objective: 
 Create a reproducible toolbox environment with all development tools.
 
@@ -27,7 +28,7 @@ Create a reproducible toolbox environment with all development tools.
 Exit criteria: 
 A new Toolbox session can run all tools and connect to Floci without relying on undocumented host configuration.
 
-# Phase 2 — Understand Floci and AWS API behavior
+# ⚠️[IN PROGRES] Phase 2 — Understand Floci and AWS API behavior
 Objective: 
 Understand what Floci emulates, what persists, and how AWS clients communicate with it.
 

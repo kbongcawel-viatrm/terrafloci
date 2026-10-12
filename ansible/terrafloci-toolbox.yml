@@ -163,7 +163,7 @@
           - "curl -fsSL --proto '=https' --tlsv1.2 {{ floci_install_url }} | sh"
       when: floci_check.rc != 0
 
-     - name: Verify required tools and Podman socket access inside the toolbox
+    - name: Verify required tools and Podman socket access inside the toolbox
       ansible.builtin.command:
         argv:
           - toolbox

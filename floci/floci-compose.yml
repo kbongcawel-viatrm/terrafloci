@@ -1,7 +1,28 @@
 services:
   floci:
     image: docker.io/floci/floci:latest
+    hostname: floci
     ports:
       - "4566:4566"
+      - "6379-6399:6379-6399"
+      - "7001-7099:7001-7099"
+      - "9200-9299:9200-9299"
+    environment:
+      FLOCI_HOSTNAME: floci
+      FLOCI_SERVICES_LAMBDA_DOCKER_NETWORK: floci-net
+      FLOCI_SERVICES_LAMBDA_DOCKER_HOST_OVERRIDE: floci
+      FLOCI_RUN_AS_ROOT: "true"
+    security_opt:
+      - label=disable
     volumes:
-      - ./data:/app/data
+      - floci-data:/app/data
+      - ${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:z
+    networks:
+      - floci-net
+
+volumes:
+  floci-data:
+
+networks:
+  floci-net:
+    name: floci-net

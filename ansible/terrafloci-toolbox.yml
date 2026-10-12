@@ -32,7 +32,23 @@
           - --version
       loop:
         - toolbox
+        - podman
       changed_when: false
+
+    - name: Verify Podman is responding on the host
+      ansible.builtin.command:
+        argv:
+          - podman
+          - info
+          - --format
+          - json
+      register: host_podman_info
+      changed_when: false
+      failed_when: host_podman_info.rc != 0
+
+    - name: Report host Podman status
+      ansible.builtin.debug:
+        msg: "Host Podman is responding; the existing toolbox will be configured without being recreated."
 
     - name: Inspect toolbox containers
       ansible.builtin.command:

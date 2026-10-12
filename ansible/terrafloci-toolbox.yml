@@ -17,6 +17,7 @@
       - git
       - curl
       - jq
+      - pip
       - python3
       - python3-pip
       - ansible-core
@@ -162,21 +163,7 @@
           - "curl -fsSL --proto '=https' --tlsv1.2 {{ floci_install_url }} | sh"
       when: floci_check.rc != 0
 
-    - name: Install podman-compose with pip
-      ansible.builtin.command:
-        argv:
-          - toolbox
-          - run
-          - --container
-          - "{{ toolbox_name }}"
-          - --
-          - sudo
-          - python3
-          - -m
-          - pip
-          - install
-
-    - name: Verify required tools and Podman socket access inside the toolbox
+     - name: Verify required tools and Podman socket access inside the toolbox
       ansible.builtin.command:
         argv:
           - toolbox

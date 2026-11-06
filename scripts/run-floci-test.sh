@@ -12,8 +12,8 @@ BUCKET="terrafloci-test-$(date +%s)-$$"
 BUCKET_CREATED=false
 
 # Dummy credentials for local testing only
-export AWS_ACCESS_KEY_ID="dummy_id"
-export AWS_SECRET_ACCESS_KEY="dummy_key"
+export AWS_ACCESS_KEY_ID=
+export AWS_SECRET_ACCESS_KEY=
 export AWS_DEFAULT_REGION="$REGION"
 export AWS_EC2_METADATA_DISABLED=true
 export AWS_PAGER=""

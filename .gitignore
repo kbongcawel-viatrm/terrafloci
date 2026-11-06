@@ -1,6 +1,7 @@
 /installers/*.rpm
-*.sw*
-*.swp
+**/*.sw*
+**/*.swp
+**/*.swo
 # Terraform / Terragrunt generated files and local state
 **/.terraform/
 **/.terragrunt-cache/
